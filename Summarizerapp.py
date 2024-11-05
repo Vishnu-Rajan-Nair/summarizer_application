@@ -32,7 +32,7 @@ def summarize_text(text, tokenizer, model, num_sentences):
     tokens = tokenizer(text, truncation=True, padding="longest", return_tensors="pt")
     summary_ids = model.generate(
         tokens['input_ids'],
-        max_length=num_sentences * 4,
+        max_length=num_sentences * 5,
         min_length=num_sentences * 2,
         num_beams=4,
         length_penalty=2.0,
@@ -44,7 +44,6 @@ def summarize_text(text, tokenizer, model, num_sentences):
     )
     return tokenizer.decode(summary_ids[0], skip_special_tokens=True)
 
-# Add custom CSS for a border around the application
 st.markdown(
     """
     <style>
@@ -77,6 +76,47 @@ if option in ['News Article Link', 'Text Input']:
     
     num_sentences = st.sidebar.slider("Select maximum number of words for summary:", 10, 100, 50)
 
+    # Move the SUMMARIZE button inside the condition
+    if st.sidebar.button('SUMMARIZE'):
+        with st.spinner('Preparing summary. Please wait...'):
+            try:
+                summary_displayed = False  # Flag to check if a summary has been displayed
+                
+                if option == 'News Article Link':
+                    if not source_data or not validators.url(source_data):
+                        st.error("Please enter a valid URL")
+                        st.stop()
+                    
+                    text = extract_text_from_url(source_data)
+                    preprocessed_text = preprocess_text(text)
+                    tokenizer, model = load_pegasus_model("google/pegasus-xsum")
+                    summary = summarize_text(preprocessed_text, tokenizer, model, num_sentences)
+                    
+                    st.success("Summary generated successfully!")
+                    st.subheader("Summary:")
+                    st.write(summary)
+                    summary_displayed = True
+                
+                elif option == 'Text Input':
+                    if not source_data.strip():
+                        st.error("Please enter some text")
+                        st.stop()
+                    
+                    preprocessed_text = preprocess_text(source_data)
+                    tokenizer, model = load_pegasus_model("google/pegasus-xsum")
+                    summary = summarize_text(preprocessed_text, tokenizer, model, num_sentences)
+                    
+                    st.success("Summary generated successfully!")
+                    st.subheader("Summary:")
+                    st.write(summary)
+                    summary_displayed = True
+
+                if not summary_displayed:
+                    st.warning("No summary was generated. Please check your input.")
+
+            except Exception as e:
+                st.error(f"An error occurred: {str(e)}")
+
 elif option == 'File Upload':
     source_data = st.sidebar.file_uploader("Upload a file", type="pdf")
     summary_type = st.sidebar.radio("Choose summary type:", ('Page-wise Summary', 'Whole File Summary'))
@@ -98,7 +138,7 @@ elif option == 'File Upload':
                         
                         for i, page_text in enumerate(pages[:num_pages], 1):
                             preprocessed_text = preprocess_text(page_text)
-                            summary = summarize_text(preprocessed_text, tokenizer, model, 10)
+                            summary = summarize_text(preprocessed_text, tokenizer, model, 40)
                             
                             # Update progress
                             progress_text.info(f"Generated summaries for {i} out of {num_pages} pages...")
@@ -117,90 +157,8 @@ elif option == 'File Upload':
                     tokenizer, model = load_pegasus_model("google/pegasus-large")
                     full_text = ' '.join(pages)
                     preprocessed_text = preprocess_text(full_text)
-                    full_summary = summarize_text(preprocessed_text, tokenizer, model, 20)
+                    full_summary = summarize_text(preprocessed_text, tokenizer, model, 50)
                     
                     st.success("Summary generated successfully!")
                     st.subheader("Whole File Summary:")
                     st.write(full_summary)
-
-if st.sidebar.button('SUMMARIZE'):
-    with st.spinner('Preparing summary. Please wait...'):
-        try:
-            summary_displayed = False  # Flag to check if a summary has been displayed
-            
-            if option == 'News Article Link':
-                if not source_data or not validators.url(source_data):
-                    st.error("Please enter a valid URL")
-                    st.stop()
-                
-                text = extract_text_from_url(source_data)
-                preprocessed_text = preprocess_text(text)
-                tokenizer, model = load_pegasus_model("google/pegasus-xsum")
-                summary = summarize_text(preprocessed_text, tokenizer, model, num_sentences)
-                
-                st.success("Summary generated successfully!")
-                st.subheader("Summary:")
-                st.write(summary)
-                summary_displayed = True
-            
-            elif option == 'Text Input':
-                if not source_data.strip():
-                    st.error("Please enter some text")
-                    st.stop()
-                
-                preprocessed_text = preprocess_text(source_data)
-                tokenizer, model = load_pegasus_model("google/pegasus-xsum")
-                summary = summarize_text(preprocessed_text, tokenizer, model, num_sentences)
-                
-                st.success("Summary generated successfully!")
-                st.subheader("Summary:")
-                st.write(summary)
-                summary_displayed = True
-            
-            elif option == 'File Upload':
-                if not source_data:
-                    st.error("Please upload a valid PDF file")
-                    st.stop()
-                
-                if summary_type == 'Whole File Summary':
-                    tokenizer, model = load_pegasus_model("google/pegasus-large")
-                    pages = extract_text_from_pdf(source_data)
-                    full_text = ' '.join(pages)
-                    preprocessed_text = preprocess_text(full_text)
-                    full_summary = summarize_text(preprocessed_text, tokenizer, model, num_sentences)
-                    
-                    st.success("Summary generated successfully!")
-                    st.subheader("Whole File Summary:")
-                    st.write(full_summary)
-                    summary_displayed = True
-
-                elif summary_type == 'Page-wise Summary':
-                    num_pages = st.sidebar.slider("Select number of pages to summarize:", 1, len(pages), len(pages))
-            
-
-                    if num_pages > 0:
-                        st.info("Summarization in progress...")
-                        tokenizer, model = load_pegasus_model("google/pegasus-large")
-                        progress_text = st.empty()  # Create a placeholder for progress updates
-                        
-                        for i, page_text in enumerate(pages[:num_pages], 1):
-                            preprocessed_text = preprocess_text(page_text)
-                            summary = summarize_text(preprocessed_text, tokenizer, model, num_sentences)
-                            
-                            # Update progress
-                            progress_text.info(f"Generated summaries for {i} out of {num_pages} pages...")
-                            
-                            st.subheader(f"Summary of Page {i}:")
-                            st.write(summary)
-                            st.markdown("---")
-                        
-                        # Clear the progress message and show final success message
-                        progress_text.empty()
-                        st.success("All summaries generated successfully!")
-                        summary_displayed = True
-
-            if not summary_displayed:
-                st.warning("No summary was generated. Please check your input.")
-
-        except Exception as e:
-            st.error(f"An error occurred: {str(e)}")
