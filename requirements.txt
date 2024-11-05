@@ -5,3 +5,4 @@ transformers==4.45.2
 validators==0.34.0
 torch>=2.0.0
 sentencepiece>=0.1.99
+lxml_html_clean
